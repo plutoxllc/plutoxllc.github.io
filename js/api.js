@@ -7,7 +7,10 @@
   'use strict';
 
   var BASE_URL = 'http://localhost:4879';
-  var TIMEOUT_MS = 1500;
+  // Production /api/xray is two sequential SP-API round-trips (catalog+offers,
+  // then fees at the real Buy Box price) plus a possible LWA token exchange —
+  // keep this generous; failures still silently fall back to demo data.
+  var TIMEOUT_MS = 10000;
 
   function fetchJson(url) {
     var controller = new AbortController();

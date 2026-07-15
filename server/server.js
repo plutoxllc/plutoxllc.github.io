@@ -136,6 +136,30 @@ async function safeCall(fn) {
   }
 }
 
+// Pull a usable listing price out of the offers section: Buy Box landed
+// price first, then the lowest offer. Returns null when the section errored
+// or carries no prices (TotalOfferCount may legitimately be 0).
+function offerPrice(offers) {
+  if (!offers || offers.error) return null;
+  const summary = offers.payload && offers.payload.Summary;
+  if (!summary) return null;
+
+  const bb = Array.isArray(summary.BuyBoxPrices) ? summary.BuyBoxPrices[0] : null;
+  if (bb && bb.LandedPrice) {
+    const amt = Number(bb.LandedPrice.Amount);
+    if (Number.isFinite(amt) && amt > 0) return amt;
+  }
+
+  const lo = Array.isArray(summary.LowestPrices) ? summary.LowestPrices[0] : null;
+  if (lo) {
+    let amt = NaN;
+    if (lo.LandedPrice && lo.LandedPrice.Amount != null) amt = Number(lo.LandedPrice.Amount);
+    else if (lo.ListingPrice && lo.ListingPrice.Amount != null) amt = Number(lo.ListingPrice.Amount);
+    if (Number.isFinite(amt) && amt > 0) return amt;
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Route handlers
 // ---------------------------------------------------------------------------
@@ -161,7 +185,8 @@ async function handleXray(query) {
   const mkt = CONFIG.marketplaceId;
   const encAsin = encodeURIComponent(asin);
 
-  const [catalog, offers, fees] = await Promise.all([
+  // Catalog + offers first — the fees estimate needs a real listing price.
+  const [catalog, offers] = await Promise.all([
     safeCall(() =>
       spapiFetch(
         `/catalog/2022-04-01/items/${encAsin}?marketplaceIds=${encodeURIComponent(mkt)}&includedData=attributes,salesRanks,summaries`
@@ -172,28 +197,49 @@ async function handleXray(query) {
         `/products/pricing/v0/items/${encAsin}/offers?MarketplaceId=${encodeURIComponent(mkt)}&ItemCondition=New`
       )
     ),
-    safeCall(() =>
-      spapiFetch(`/products/fees/v0/items/${encAsin}/feesEstimate`, {
-        method: 'POST',
-        body: {
-          FeesEstimateRequest: {
-            MarketplaceId: mkt,
-            IsAmazonFulfilled: true,
-            PriceToEstimateFees: {
-              ListingPrice: { CurrencyCode: 'USD', Amount: 29.99 },
-            },
-            Identifier: 'nexlaunch-request',
-          },
-        },
-      })
-    ),
   ]);
+
+  // Fee-estimate price: Buy Box → lowest offer → ?price= override → 29.99
+  const priceParam = Number.parseFloat(query.get('price') || '');
+  const derivedPrice = offerPrice(offers);
+  const explicitPrice = Number.isFinite(priceParam) && priceParam > 0 ? priceParam : null;
+  const feesEstimatedAt = derivedPrice ?? explicitPrice ?? 29.99;
+
+  // No catalog match and no usable price: skip the fees round-trip entirely
+  // (fees v0 is ~1 rps in production — bad ASINs must not burn the budget).
+  if (catalog.error && derivedPrice === null && explicitPrice === null) {
+    return {
+      status: 200,
+      body: {
+        source: CONFIG.spapiBase.includes('sandbox') ? 'sp-api-sandbox' : 'sp-api-production',
+        asin, catalog, offers,
+        fees: { error: 'skipped — no catalog match and no usable price', skipped: true },
+        feesEstimatedAt: null,
+      },
+    };
+  }
+
+  const fees = await safeCall(() =>
+    spapiFetch(`/products/fees/v0/items/${encAsin}/feesEstimate`, {
+      method: 'POST',
+      body: {
+        FeesEstimateRequest: {
+          MarketplaceId: mkt,
+          IsAmazonFulfilled: true,
+          PriceToEstimateFees: {
+            ListingPrice: { CurrencyCode: 'USD', Amount: feesEstimatedAt },
+          },
+          Identifier: 'nexlaunch-request',
+        },
+      },
+    })
+  );
 
   return {
     status: 200,
     body: {
       source: CONFIG.spapiBase.includes('sandbox') ? 'sp-api-sandbox' : 'sp-api-production',
-      asin, catalog, offers, fees,
+      asin, feesEstimatedAt, catalog, offers, fees,
     },
   };
 }

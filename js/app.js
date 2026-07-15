@@ -68,35 +68,167 @@ const ALL_ROWS = [...AMZ_PRODUCTS.map(amzRow), ...TT_PRODUCTS.map(ttRow)];
 
 /* ---------- X-Ray ---------- */
 let lastXray = null;
-function runXray() {
+
+/* Map an Amazon rank-group title (e.g. "Beauty & Personal Care") onto the
+   closest BSR_MODEL key; otherwise fall back to the default model. */
+function bsrModelKeyFor(title) {
+  if (!title) return "default";
+  const t = title.toLowerCase();
+  for (const k of Object.keys(BSR_MODEL)) {
+    if (k === "default") continue;
+    const kl = k.toLowerCase();
+    if (t === kl || t.includes(kl) || kl.includes(t)) return k;
+  }
+  if (t.includes("beauty")) return "Beauty";
+  if (t.includes("grocery") || t.includes("gourmet")) return "Grocery";
+  if (t.includes("electronic")) return "Electronics";
+  if (t.includes("toy")) return "Toys & Games";
+  return "default";
+}
+
+/* Shape a live SP-API /api/xray payload into the { product, fees } pair
+   runXray renders. Returns null when the payload can't support a real
+   analysis (no name or no price) so the caller falls back to demo data. */
+function buildLiveXray(live, asin) {
+  const summary = (live.catalog.summaries || [])[0] || {};
+  const name = summary.itemName;
+  if (!name) return null;
+
+  // Price: Buy Box landed price → lowest offer → bail out (demo path)
+  let price = null, offerCount = null;
+  const off = live.offers && !live.offers.error && live.offers.payload
+    ? live.offers.payload.Summary : null;
+  if (off) {
+    if (typeof off.TotalOfferCount === "number") offerCount = off.TotalOfferCount;
+    const bb = (off.BuyBoxPrices || [])[0];
+    if (bb && bb.LandedPrice && Number(bb.LandedPrice.Amount) > 0) {
+      price = Number(bb.LandedPrice.Amount);
+    } else {
+      const lo = (off.LowestPrices || [])[0];
+      const amt = lo && ((lo.LandedPrice && lo.LandedPrice.Amount) ||
+                         (lo.ListingPrice && lo.ListingPrice.Amount));
+      if (Number(amt) > 0) price = Number(amt);
+    }
+  }
+  if (!price) return null; // without a real price the analysis is meaningless
+
+  // Weight normalized to pounds (default 1)
+  let weight = 1;
+  try {
+    const wEntry = live.catalog.attributes.item_weight[0];
+    let w = Number(wEntry.value);
+    const unit = String(wEntry.unit || "pounds").toLowerCase();
+    if (unit.startsWith("ounce")) w /= 16;
+    else if (unit.startsWith("kilogram")) w *= 2.20462;
+    else if (unit.startsWith("gram")) w /= 453.592;
+    if (w > 0) weight = w;
+  } catch (e) { /* attribute missing — keep default */ }
+
+  // BSR + rank-group title (displayGroupRanks preferred)
+  let bsr = null, rankTitle = null;
+  const sr = (live.catalog.salesRanks || [])[0];
+  if (sr) {
+    const entry = (sr.displayGroupRanks || [])[0] || (sr.classificationRanks || [])[0];
+    if (entry && entry.rank) { bsr = entry.rank; rankTitle = entry.title || null; }
+  }
+
+  // Real fees when the fees section is valid, else null (caller falls
+  // back to the amazonFees() model at the live price).
+  let fees = null;
+  const fe = live.fees && !live.fees.error && live.fees.payload &&
+    live.fees.payload.FeesEstimateResult &&
+    live.fees.payload.FeesEstimateResult.FeesEstimate;
+  if (fe && fe.TotalFeesEstimate && Number(fe.TotalFeesEstimate.Amount) >= 0) {
+    const detail = fe.FeeDetailList || [];
+    const amt = t => {
+      const d = detail.find(x => x.FeeType === t);
+      return d && d.FeeAmount ? Number(d.FeeAmount.Amount) || 0 : 0;
+    };
+    fees = { referral: amt("ReferralFee"), fba: amt("FBAFees"), total: Number(fe.TotalFeesEstimate.Amount) };
+  }
+  // Server estimated fees at a different price than we derived (e.g. its
+  // fallback $29.99) — those numbers don't describe THIS price; discard.
+  const estAt = Number(live.feesEstimatedAt);
+  if (fees && Number.isFinite(estAt) && Math.abs(estAt - price) > 0.01) fees = null;
+
+  return {
+    product: {
+      asin, emoji: "📦", name,
+      category: bsrModelKeyFor(rankTitle),
+      sub: rankTitle || "Amazon catalog",
+      price, bsr, weight,
+      cost: Math.round(price * 0.25 * 100) / 100, // landed cost unknown — 25% assumption
+      reviews: null, rating: null, trend: 0,      // not exposed by these endpoints
+      offerCount,
+      source: "live"
+    },
+    fees
+  };
+}
+
+let xraySeq = 0;
+async function runXray() {
   const q = document.getElementById("xray-input").value.trim();
   if (!q) return;
-  const p = xrayLookup(q);
-  const sales = estimateSalesFromBSR(p.bsr, p.category);
-  const revenue = sales * p.price;
-  const fees = amazonFees(p.price, p.weight);
+  const seq = ++xraySeq;
+
+  // Live SP-API attempt — any failure silently falls back to demo data.
+  let live = null;
+  const asinMatch = q.toUpperCase().match(/B0[A-Z0-9]{8}/);
+  if (asinMatch && window.NexApi) {
+    try {
+      const resp = await NexApi.serverXray(asinMatch[0]);
+      // 503/error bodies are truthy — check .error explicitly.
+      if (resp && !resp.error && resp.catalog && !resp.catalog.error && resp.catalog.summaries) {
+        live = buildLiveXray(resp, asinMatch[0]);
+      }
+    } catch (e) { live = null; }
+  }
+  if (seq !== xraySeq) return; // a newer X-Ray superseded this one mid-flight
+
+  const p = live ? live.product : xrayLookup(q);
+  const isLive = p.source === "live";
+  const feesReal = !!(live && live.fees);
+  const sales = p.bsr ? estimateSalesFromBSR(p.bsr, p.category) : null;
+  const revenue = sales ? sales * p.price : null;
+  const fees = feesReal ? live.fees : amazonFees(p.price, p.weight);
   const profit = p.price - fees.total - p.cost;
   const marginPct = (profit / p.price) * 100;
 
   document.getElementById("xr-emoji").textContent = p.emoji;
   document.getElementById("xr-name").textContent = p.name;
   document.getElementById("xr-asin").textContent = p.asin;
-  document.getElementById("xr-cat").textContent = p.category + " › " + p.sub;
-  document.getElementById("xr-src").textContent = p.source === "demo" ? "verified demo data" : "modeled estimate";
-  document.getElementById("xr-rev").textContent = fmtUSD(revenue);
-  document.getElementById("xr-sales").textContent = fmtNum(sales);
-  document.getElementById("xr-bsr").textContent = "#" + fmtNum(p.bsr);
+  document.getElementById("xr-cat").textContent = isLive
+    ? p.sub + (p.offerCount != null ? " · " + fmtNum(p.offerCount) + " offer" + (p.offerCount === 1 ? "" : "s") : "")
+    : p.category + " › " + p.sub;
+  const srcEl = document.getElementById("xr-src");
+  srcEl.textContent = isLive ? "LIVE Amazon data"
+    : p.source === "demo" ? "verified demo data" : "modeled estimate";
+  srcEl.classList.toggle("live", isLive);
+  document.getElementById("xr-rev").textContent = revenue ? fmtUSD(revenue) : "—";
+  document.getElementById("xr-sales").textContent = sales ? fmtNum(sales) : "—";
+  document.getElementById("xr-bsr").textContent = p.bsr ? "#" + fmtNum(p.bsr) : "—";
   const tEl = document.getElementById("xr-trend");
-  tEl.textContent = (p.trend >= 0 ? "▲ " : "▼ ") + Math.abs(p.trend).toFixed(1) + "% 30d";
-  tEl.className = "k-delta " + (p.trend >= 0 ? "up" : "down");
-  document.getElementById("xr-reviews").textContent = fmtNum(p.reviews);
-  document.getElementById("xr-rating").textContent = "★ " + p.rating.toFixed(1) + " avg";
+  if (isLive) {
+    tEl.textContent = "n/a"; // 30d trend not exposed by these endpoints
+    tEl.className = "k-delta";
+    tEl.style.color = "var(--muted)";
+  } else {
+    tEl.textContent = (p.trend >= 0 ? "▲ " : "▼ ") + Math.abs(p.trend).toFixed(1) + "% 30d";
+    tEl.className = "k-delta " + (p.trend >= 0 ? "up" : "down");
+    tEl.style.color = "";
+  }
+  document.getElementById("xr-reviews").textContent = isLive ? "—" : fmtNum(p.reviews);
+  document.getElementById("xr-rating").textContent = isLive ? "n/a" : "★ " + p.rating.toFixed(1) + " avg";
 
+  const otherFees = fees.total - fees.referral - fees.fba;
   document.getElementById("xr-fees").innerHTML = `
-    <tr><td>Sale price</td><td>${fmtUSD(p.price, 2)}</td></tr>
-    <tr><td>Referral fee (15%)</td><td style="color:var(--red)">−${fmtUSD(fees.referral, 2)}</td></tr>
-    <tr><td>FBA fulfillment</td><td style="color:var(--red)">−${fmtUSD(fees.fba, 2)}</td></tr>
-    <tr><td>Est. landed cost</td><td style="color:var(--red)">−${fmtUSD(p.cost, 2)}</td></tr>
+    <tr><td>Sale price${isLive ? " (Buy Box)" : ""}</td><td>${fmtUSD(p.price, 2)}</td></tr>
+    <tr><td>Referral fee${feesReal ? "" : " (15% est.)"}</td><td style="color:var(--red)">−${fmtUSD(fees.referral, 2)}</td></tr>
+    <tr><td>FBA fulfillment${feesReal ? "" : " (est.)"}</td><td style="color:var(--red)">−${fmtUSD(fees.fba, 2)}</td></tr>
+    ${feesReal && Math.abs(otherFees) > 0.005
+      ? `<tr><td>${otherFees >= 0 ? "Other Amazon fees" : "Fee promotion / credit"}</td><td style="color:${otherFees >= 0 ? "var(--red)" : "var(--green)"}">${otherFees >= 0 ? "−" : "+"}${fmtUSD(Math.abs(otherFees), 2)}</td></tr>` : ""}
+    <tr><td>${isLive ? "Est. landed cost (25% assumption)" : "Est. landed cost"}</td><td style="color:var(--red)">−${fmtUSD(p.cost, 2)}</td></tr>
     <tr><td>Net profit / unit</td><td style="color:${profit > 0 ? "var(--green)" : "var(--red)"}">${fmtUSD(profit, 2)} (${marginPct.toFixed(0)}%)</td></tr>`;
 
   const v = document.getElementById("xr-verdict");
@@ -108,23 +240,32 @@ function runXray() {
     v.innerHTML = `<span class="verdict bad">❌ Pass — margin won't survive ad spend and returns</span>`;
   }
 
-  // 12-month modeled trend bars
+  // 12-month modeled trend bars (live products: modeled estimate, trend 0)
   const rnd = seededFrom(p.asin);
   const chart = document.getElementById("xr-chart");
-  const monthly = [];
-  let base = sales * 0.6;
-  for (let i = 0; i < 12; i++) {
-    base *= 1 + (p.trend / 100) / 6 + (rnd() - 0.45) * 0.18;
-    monthly.push(Math.max(base, sales * 0.15));
+  if (sales) {
+    const monthly = [];
+    let base = sales * 0.6;
+    for (let i = 0; i < 12; i++) {
+      base *= 1 + (p.trend / 100) / 6 + (rnd() - 0.45) * 0.18;
+      monthly.push(Math.max(base, sales * 0.15));
+    }
+    const max = Math.max(...monthly);
+    chart.innerHTML = monthly.map(m =>
+      `<div class="bar" style="height:${Math.round((m / max) * 100)}%" title="${fmtNum(Math.round(m))} units"></div>`).join("");
+  } else {
+    chart.innerHTML = "";
   }
-  const max = Math.max(...monthly);
-  chart.innerHTML = monthly.map(m =>
-    `<div class="bar" style="height:${Math.round((m / max) * 100)}%" title="${fmtNum(Math.round(m))} units"></div>`).join("");
   const months = ["Aug '25","Sep","Oct","Nov","Dec","Jan '26","Feb","Mar","Apr","May","Jun","Jul"];
   document.getElementById("xr-chart-start").textContent = months[0];
   document.getElementById("xr-chart-end").textContent = months[11];
 
-  lastXray = { product: p, fees };
+  const chartSub = document.getElementById("xr-chart-sub");
+  if (chartSub) chartSub.textContent = isLive
+    ? "Modeled from live sales rank (estimate)."
+    : "Modeled from rank velocity (demo).";
+
+  lastXray = { product: p, fees, feesReal };
   const rsOut = document.getElementById("rs-result");
   rsOut.classList.remove("show");
   rsOut.innerHTML = "";
@@ -180,10 +321,12 @@ document.getElementById("rs-calc").addEventListener("click", () => {
     ? `⚠️ <strong>Possible brand gating</strong> — "${brandTok}" looks like a brand name`
     : `✔ <strong>Typically ungated category</strong>`;
 
+  const rsSrc = p.source === "live" ? "live buy box" : "demo data";
+  const rsFeeNote = lastXray.feesReal ? "real Amazon fees" : "referral + FBA (est.)";
   out.innerHTML = `
     <div class="grid-4">
-      <div class="kpi"><div class="k-label">Buy Box (est.)</div><div class="k-value">${fmtUSD(buyBox, 2)}</div><div class="k-delta" style="color:var(--muted)">demo data</div></div>
-      <div class="kpi"><div class="k-label">Payout After Fees</div><div class="k-value">${fmtUSD(payout, 2)}</div><div class="k-delta" style="color:var(--muted)">referral + FBA</div></div>
+      <div class="kpi"><div class="k-label">Buy Box${p.source === "live" ? "" : " (est.)"}</div><div class="k-value">${fmtUSD(buyBox, 2)}</div><div class="k-delta" style="color:var(--muted)">${rsSrc}</div></div>
+      <div class="kpi"><div class="k-label">Payout After Fees</div><div class="k-value">${fmtUSD(payout, 2)}</div><div class="k-delta" style="color:var(--muted)">${rsFeeNote}</div></div>
       <div class="kpi"><div class="k-label">Net Profit / Unit</div><div class="k-value" style="color:${net > 0 ? "var(--green)" : "var(--red)"}">${fmtUSD(net, 2)}</div><div class="k-delta" style="color:var(--muted)">${margin.toFixed(0)}% margin</div></div>
       <div class="kpi"><div class="k-label">ROI</div><div class="k-value">${roi.toFixed(0)}%</div><div class="k-delta" style="color:var(--muted)">on ${fmtUSD(cashIn, 2)} cash in</div></div>
     </div>

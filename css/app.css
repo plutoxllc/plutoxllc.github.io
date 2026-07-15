@@ -191,3 +191,10 @@ th.sortable .arrow { font-size: 9px; margin-left: 4px; }
 .feed-item .when { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; padding-top: 2px; width: 70px; flex: none; }
 .feed-item .what strong { color: var(--green); }
 .feed-item.hot .what strong { color: var(--pink); }
+
+/* ---- X-Ray live data source badge ---- */
+#xr-src.live { color: var(--green); font-weight: 600; }
+#xr-src.live::before {
+  content: "●"; display: inline-block; margin-right: 5px;
+  font-size: 8px; vertical-align: 2px; color: var(--green);
+}
