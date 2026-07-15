@@ -191,7 +191,10 @@ async function handleXray(query) {
 
   return {
     status: 200,
-    body: { source: 'sp-api-sandbox', asin, catalog, offers, fees },
+    body: {
+      source: CONFIG.spapiBase.includes('sandbox') ? 'sp-api-sandbox' : 'sp-api-production',
+      asin, catalog, offers, fees,
+    },
   };
 }
 
