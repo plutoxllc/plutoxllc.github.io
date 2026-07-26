@@ -19,6 +19,7 @@
     <button class="side-link" data-view="research"><span class="ic">🔎</span><span class="txt">Research</span></button>
     <button class="side-link" data-view="tiktok"><span class="ic">📈</span><span class="txt">TikTok Trends</span></button>
     <button class="side-link" data-view="listings"><span class="ic">🧠</span><span class="txt">AI Listings</span></button>
+    <button class="side-link" data-view="creators"><span class="ic">🤝</span><span class="txt">Creator Outreach</span></button>
     <button class="side-link" data-view="automations"><span class="ic">⚙️</span><span class="txt">Automations</span></button>
     <button class="side-link" data-view="academy"><span class="ic">🎓</span><span class="txt">Academy</span><span class="soon">SOON</span></button>
   </nav>
@@ -56,6 +57,7 @@
             <button class="btn btn-primary" data-goto="xray">🔬 X-Ray a Product</button>
             <button class="btn btn-ghost" data-goto="tiktok">📈 Browse TikTok Trends</button>
             <button class="btn btn-ghost" data-goto="listings">🧠 Generate a Listing</button>
+            <button class="btn btn-ghost" data-goto="creators">🤝 Find Creators</button>
             <button class="btn btn-ghost" data-goto="research">🔎 Open Research Table</button>
           </div>
         </div>
@@ -214,6 +216,59 @@
       </div>
     </section>
 
+    <!-- ======== CREATOR OUTREACH ======== -->
+    <section class="view" id="view-creators">
+      <div class="panel">
+        <h2>Creator Directory</h2>
+        <p class="p-sub">Mid-tier TikTok creators ranked by engagement — the tier that actually converts on commission deals. Demo directory; production hooks into the TikTok Creator Marketplace.</p>
+        <div class="filter-row">
+          <select id="cr-category"><option value="all">All Categories</option></select>
+          <select id="cr-size">
+            <option value="all">Any size</option>
+            <option value="nano">Nano (&lt;50k)</option>
+            <option value="mid">Mid (50k–150k)</option>
+            <option value="macro">Macro (150k+)</option>
+          </select>
+          <input id="cr-search" type="text" placeholder="Search creators…" style="flex:1;min-width:160px">
+        </div>
+        <div class="tt-grid" id="cr-grid"></div>
+        <div class="table-foot" id="cr-count"></div>
+      </div>
+
+      <div class="panel" style="margin-top:20px" id="cr-kit-panel">
+        <h2>Outreach Kit</h2>
+        <p class="p-sub">Pick a creator and a product — get the commission math, the DM, and the UGC brief. Template engine (demo) — wire to Claude proxy for personalized drafts.</p>
+        <div class="grid-3">
+          <div class="field">
+            <label for="cr-pick-creator">Creator</label>
+            <select id="cr-pick-creator"></select>
+          </div>
+          <div class="field">
+            <label for="cr-pick-product">Product</label>
+            <select id="cr-pick-product"></select>
+          </div>
+          <div class="field">
+            <label for="cr-commission">Commission offer (%)</label>
+            <input id="cr-commission" type="number" min="0" max="60" step="1" value="15">
+          </div>
+        </div>
+        <button class="btn btn-primary" id="cr-generate">✨ Generate Outreach</button>
+        <div class="listing-out" id="cr-kit-out">
+          <div id="cr-econ" style="margin-bottom:6px"></div>
+          <h4>Creator DM <button class="btn btn-ghost btn-sm copy-btn" id="cr-copy-dm">📋 Copy DM</button></h4>
+          <div class="block" id="cr-dm-out"></div>
+          <h4>UGC Brief <button class="btn btn-ghost btn-sm copy-btn" id="cr-copy-brief">📋 Copy Brief</button></h4>
+          <div class="block" id="cr-brief-out"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:20px">
+        <h2>Outreach Pipeline</h2>
+        <p class="p-sub" id="cr-pipe-count">Empty — add creators from the directory above.</p>
+        <div id="cr-pipe-list"></div>
+      </div>
+    </section>
+
     <!-- ======== AUTOMATIONS ======== -->
     <section class="view" id="view-automations">
       <div class="grid-2">
@@ -289,6 +344,7 @@
 <script src="js/data.js"></script>
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>
+<script src="js/creators.js"></script>
 <script src="js/receptionist.js"></script>
 </body>
 </html>

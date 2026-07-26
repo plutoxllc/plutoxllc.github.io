@@ -201,6 +201,34 @@ th.sortable .arrow { font-size: 9px; margin-left: 4px; }
 .feed-item .what strong { color: var(--green); }
 .feed-item.hot .what strong { color: var(--pink); }
 
+/* ---------- creator outreach ---------- */
+.cr-card { background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 20px; transition: all .2s; }
+.cr-card:hover { border-color: rgba(103,232,249,.35); transform: translateY(-2px); }
+.cr-card .head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.cr-card .thumb {
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 18px; font-weight: 800; color: var(--cyan);
+  background: linear-gradient(135deg, #10222a, #0a1418); border: 1px solid rgba(103,232,249,.2);
+}
+.cr-card h3 { font-size: 14.5px; line-height: 1.3; font-family: var(--mono); }
+.cr-card .cat { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.cr-actions { display: flex; gap: 8px; margin-top: 14px; }
+.cr-actions .btn { flex: 1; }
+.cr-actions .btn[disabled] { opacity: .5; cursor: default; }
+.cr-stage {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px; flex: none; width: 96px; text-align: center;
+}
+.cr-stage.s0 { color: var(--muted); background: rgba(255,255,255,.06); }
+.cr-stage.s1 { color: var(--cyan); background: rgba(103,232,249,.1); }
+.cr-stage.s2 { color: #fbbf24; background: rgba(251,191,36,.1); }
+.cr-stage.s3 { color: var(--pink); background: rgba(244,114,182,.1); }
+.cr-stage.s4 { color: var(--green); background: rgba(74,222,128,.1); }
+.cr-move { background: none; border: 1px solid var(--line-soft); border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 14px; width: 30px; height: 30px; flex: none; }
+.cr-move:hover:not([disabled]) { color: var(--green); border-color: var(--line); }
+.cr-move[disabled] { opacity: .3; cursor: default; }
+#cr-kit-out h4 .copy-btn { float: none; margin-left: 10px; vertical-align: middle; }
+
 /* ---- X-Ray live data source badge ---- */
 #xr-src.live { color: var(--green); font-weight: 600; }
 #xr-src.live::before {
