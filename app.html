@@ -38,7 +38,7 @@
     <!-- ======== OVERVIEW ======== -->
     <section class="view active" id="view-overview">
       <div class="grid-4">
-        <div class="kpi"><div class="k-label">Tracked Niches</div><div class="k-value">6</div><div class="k-delta up">▲ 2 this week</div></div>
+        <div class="kpi"><div class="k-label">Launch-Ready Picks</div><div class="k-value" id="ov-ready">—</div><div class="k-delta" style="color:var(--muted)">pass margin + competition screen</div></div>
         <div class="kpi"><div class="k-label">Top Amazon Opportunity</div><div class="k-value green" id="ov-amz-top">—</div><div class="k-delta" id="ov-amz-top-name" style="color:var(--muted)">—</div></div>
         <div class="kpi"><div class="k-label">Hottest TikTok Product</div><div class="k-value pink" id="ov-tt-top">—</div><div class="k-delta" id="ov-tt-top-name" style="color:var(--muted)">—</div></div>
         <div class="kpi"><div class="k-label">X-Ray Scans Left</div><div class="k-value">∞</div><div class="k-delta" style="color:var(--muted)">Trial period</div></div>
@@ -116,6 +116,12 @@
         </div>
 
         <div class="panel" style="margin-top:20px">
+          <h2>5-Point Launch Screen</h2>
+          <p class="p-sub">The pre-launch checklist, automated: margin, demand, competition, brand risk, category. Pass 4+ before you order samples.</p>
+          <div id="xr-rules"></div>
+        </div>
+
+        <div class="panel" style="margin-top:20px">
           <h2>Reseller Mode <span class="fbm-badge" id="rs-fee-badge" hidden>DROPSHIP · FBM</span></h2>
           <p class="p-sub" id="rs-sub">Attaching to an existing listing instead of launching your own? Check if the margin survives.</p>
           <label class="rs-toggle"><input type="checkbox" id="rs-toggle"><span id="rs-toggle-label">I'm reselling this product (attaching to the existing listing)</span></label>
@@ -162,6 +168,7 @@
                 <th class="sortable" data-sort="revenue">Est. Revenue<span class="arrow">▼</span></th>
                 <th class="sortable" data-sort="sales">Est. Sales<span class="arrow"></span></th>
                 <th class="sortable" data-sort="margin">Margin<span class="arrow"></span></th>
+                <th class="sortable" data-sort="comp">Competition<span class="arrow"></span></th>
                 <th class="sortable" data-sort="trend">Trend<span class="arrow"></span></th>
               </tr>
             </thead>

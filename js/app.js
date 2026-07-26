@@ -26,6 +26,17 @@ function showView(id) {
 document.querySelectorAll(".side-link").forEach(l => l.addEventListener("click", () => showView(l.dataset.view)));
 document.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => showView(b.dataset.goto)));
 
+/* ---------- competition tiers ----------
+   Amazon: review count of the incumbent listing (webinar-era rule of thumb —
+   top sellers under 1k reviews with lazy listings = beatable niche).
+   TikTok: creator count on the product (many creators = crowded feed).
+   comp is a cross-platform sort scale: raw reviews, or creators ×8. */
+function competitionTier(comp) {
+  return comp < 1000 ? { key: "weak", label: "WEAK", cls: "good" }
+    : comp < 5000 ? { key: "medium", label: "MEDIUM", cls: "mid" }
+    : { key: "crowded", label: "CROWDED", cls: "bad" };
+}
+
 /* ---------- unified product rows (research + overview) ---------- */
 function amzRow(p) {
   const sales = estimateSalesFromBSR(p.bsr, p.category);
@@ -34,7 +45,7 @@ function amzRow(p) {
   return {
     platform: "amz", emoji: p.emoji, name: p.name, category: p.category,
     price: p.price, sales, revenue: sales * p.price,
-    margin: profit / p.price, trend: p.trend
+    margin: profit / p.price, trend: p.trend, comp: p.reviews
   };
 }
 function ttRow(p) {
@@ -43,13 +54,15 @@ function ttRow(p) {
   return {
     platform: "tt", emoji: p.emoji, name: p.name, category: p.category,
     price: p.price, sales: p.unitsMo, revenue: p.unitsMo * p.price,
-    margin: profit / p.price, trend: p.trend
+    margin: profit / p.price, trend: p.trend, comp: p.creators * 8
   };
 }
 const ALL_ROWS = [...AMZ_PRODUCTS.map(amzRow), ...TT_PRODUCTS.map(ttRow)];
 
 /* ---------- overview ---------- */
 (function renderOverview() {
+  const ready = ALL_ROWS.filter(r => r.margin >= 0.25 && competitionTier(r.comp).key !== "crowded").length;
+  document.getElementById("ov-ready").textContent = ready + " / " + ALL_ROWS.length;
   const amzBest = [...AMZ_PRODUCTS.map(amzRow)].sort((a, b) => b.revenue - a.revenue)[0];
   const ttBest = [...TT_PRODUCTS].sort((a, b) => b.trend - a.trend)[0];
   document.getElementById("ov-amz-top").textContent = fmtUSD(amzBest.revenue / 1000) + "k/mo";
@@ -235,6 +248,8 @@ function showXrayNotice(asin, name, message) {
   document.getElementById("xr-chart-end").textContent = "";
   const chartSub = document.getElementById("xr-chart-sub");
   if (chartSub) chartSub.textContent = "—";
+  document.getElementById("xr-rules").innerHTML =
+    `<div class="rule-row"><span class="rule-ic">➖</span><div><div class="rule-name">Not scoreable</div><div class="rule-note">No live Buy Box — screen a child variation instead.</div></div></div>`;
   lastXray = null;
   const rsOut = document.getElementById("rs-result");
   rsOut.classList.remove("show"); rsOut.innerHTML = "";
@@ -343,6 +358,8 @@ async function runXray() {
   }
   document.getElementById("xr-fees").innerHTML = feeRows.join("");
 
+  renderLaunchScreen(p, { marginPct, sales, isLive, isFbm });
+
   const v = document.getElementById("xr-verdict");
   if (isFbm) {
     // Can't score a dropship without the seller's wholesale + ship cost.
@@ -387,6 +404,78 @@ async function runXray() {
 
   document.getElementById("xray-result").classList.add("show");
 }
+/* ---------- 5-point launch screen ----------
+   Automates the pre-launch checklist: margin, demand, competition, brand
+   risk, category. Statuses are honest about missing data — live SP-API
+   results have no review counts, FBM has no landed cost, so those rules
+   report n/a instead of a fabricated pass/fail. */
+function launchScreenRules(p, { marginPct, sales, isLive, isFbm }) {
+  const rules = [];
+
+  if (isFbm) {
+    rules.push({ name: "Healthy margin", status: "na", note: "Needs your wholesale + ship cost — run Reseller Mode below." });
+  } else if (marginPct >= 25 && p.price >= 20) {
+    rules.push({ name: "Healthy margin", status: "pass", note: `${marginPct.toFixed(0)}% net at ${fmtUSD(p.price, 2)} — clears the 25% + $20-price floor.` });
+  } else if (marginPct >= 18) {
+    rules.push({ name: "Healthy margin", status: "warn", note: `${marginPct.toFixed(0)}%${p.price < 20 ? ` at ${fmtUSD(p.price, 2)} (under the $20 floor)` : ""} — thin once ads and returns bite.` });
+  } else {
+    rules.push({ name: "Healthy margin", status: "fail", note: `${marginPct.toFixed(0)}% net — won't survive ad spend and returns.` });
+  }
+
+  if (sales == null) {
+    rules.push({ name: "Proven demand", status: "na", note: "No sales rank available for this item." });
+  } else if (sales >= 300) {
+    rules.push({ name: "Proven demand", status: "pass", note: `~${fmtNum(sales)} units/mo modeled — the market is already buying.` });
+  } else if (sales >= 100) {
+    rules.push({ name: "Proven demand", status: "warn", note: `~${fmtNum(sales)} units/mo — real but small; one competitor can take it all.` });
+  } else {
+    rules.push({ name: "Proven demand", status: "fail", note: `~${fmtNum(sales)} units/mo — you'd be creating demand, not capturing it.` });
+  }
+
+  if (p.reviews == null) {
+    rules.push({ name: "Weak competition", status: "na", note: isLive ? "Review counts aren't exposed by SP-API — check the listing manually." : "No review data." });
+  } else {
+    const tier = competitionTier(p.reviews);
+    rules.push({
+      name: "Weak competition",
+      status: tier.key === "weak" ? "pass" : tier.key === "medium" ? "warn" : "fail",
+      note: tier.key === "weak" ? `${fmtNum(p.reviews)} reviews — incumbent is beatable with a better listing.`
+        : tier.key === "medium" ? `${fmtNum(p.reviews)} reviews — winnable, but you'll need a real angle.`
+        : `${fmtNum(p.reviews)} reviews — entrenched incumbent; expect a knife fight.`
+    });
+  }
+
+  const brandTok = p.name.split(/\s+/).slice(1).find(w =>
+    /^[A-Z][A-Za-z-]{2,}$/.test(w) && !RS_COMMON_WORDS.has(w.toLowerCase()));
+  rules.push(brandTok
+    ? { name: "No brand risk", status: "warn", note: `"${brandTok}" looks like a brand name — selling branded/logo items unauthorized gets accounts suspended. Verify.` }
+    : { name: "No brand risk", status: "pass", note: "No brand tokens detected — generic product you can private-label." });
+
+  if (p.category === "Grocery") {
+    rules.push({ name: "Category safe", status: "warn", note: "Food category — expiry dates, compliance docs, and gating overhead." });
+  } else {
+    rules.push({ name: "Category safe", status: "pass", note: `${p.category} — no clothing/food/supplement compliance drag.` });
+  }
+
+  return rules;
+}
+
+const RULE_ICONS = { pass: "✅", warn: "⚠️", fail: "❌", na: "➖" };
+
+function renderLaunchScreen(p, ctx) {
+  const rules = launchScreenRules(p, ctx);
+  const scoreable = rules.filter(r => r.status !== "na");
+  const passes = scoreable.filter(r => r.status === "pass").length;
+  const cls = passes >= 4 ? "good" : passes >= 3 ? "mid" : "bad";
+  const chip = passes >= 4 ? "🚀 Launch-ready" : passes >= 3 ? "🤔 Fixable — close the gaps first" : "🛑 Keep looking";
+  document.getElementById("xr-rules").innerHTML = rules.map(r => `
+    <div class="rule-row">
+      <span class="rule-ic">${RULE_ICONS[r.status]}</span>
+      <div><div class="rule-name">${r.name}</div><div class="rule-note">${r.note}</div></div>
+    </div>`).join("") +
+    `<div style="margin-top:14px"><span class="verdict ${cls}">${chip} · ${passes}/${scoreable.length} checks passed${scoreable.length < rules.length ? ` · ${rules.length - scoreable.length} need data` : ""}</span></div>`;
+}
+
 document.getElementById("xray-btn").addEventListener("click", runXray);
 document.getElementById("xray-input").addEventListener("keydown", e => { if (e.key === "Enter") runXray(); });
 document.getElementById("xr-mode-fba").addEventListener("click", () => setXrayFulfillment("fba"));
@@ -398,7 +487,8 @@ const RS_COMMON_WORDS = new Set(("with for and the pro max mini plus set kit pac
   "water bottle light stand case mat pad clock toy serum powder tumbler keyboard roller fountain projector scrubber " +
   "trainer cooker earbuds alarm silk leather facial night star desk cat dog auto teeth whitening yoga alignment " +
   "charging ring tripod grip strength counter galaxy spin sunrise rice steamer curl ribbon ice style handle lines purple " +
-  "matcha gua sha led rgb hot-swap wake-up amazon product").split(" "));
+  "matcha gua sha led rgb hot-swap wake-up amazon product memory foam orthopedic phone wallet magsafe-compatible " +
+  "push-up workout board rainfall shower head high pressure chrome collapsible car trunk organizer eyelash no-glue bed").split(" "));
 
 document.getElementById("rs-toggle").addEventListener("change", e => {
   document.getElementById("rs-fields").classList.toggle("show", e.target.checked);
@@ -497,6 +587,7 @@ function renderResearch() {
       <td><span class="rev-green">${fmtUSD(r.revenue)}</span><span style="color:var(--muted);font-size:12px">/mo</span></td>
       <td class="mono">${fmtNum(r.sales)}/mo</td>
       <td class="mono" style="color:${r.margin >= 0.3 ? "var(--green)" : r.margin >= 0.18 ? "#fbbf24" : "var(--red)"}">${Math.round(r.margin * 100)}%</td>
+      <td>${(t => `<span class="comp-pill ${t.cls}" title="${r.platform === "amz" ? "by incumbent review count" : "by creator count on product"}">${t.label}</span>`)(competitionTier(r.comp))}</td>
       <td><span class="${r.trend >= 0 ? "trend-up" : "trend-down"}">${r.trend >= 0 ? "▲" : "▼"} ${Math.abs(r.trend).toFixed(1)}%</span></td>
     </tr>`).join("");
   document.getElementById("research-count").textContent =

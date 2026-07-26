@@ -52,7 +52,13 @@ const AMZ_PRODUCTS = [
   { asin: "B0CPETFOUN", emoji: "🐱", name: "Cat Water Fountain Stainless 84oz", category: "Pet Supplies", sub: "Cat Supplies", price: 32.99, bsr: 1893, reviews: 21440, rating: 4.5, cost: 7.9, weight: 1.8, trend: 9.3 },
   { asin: "B0CSUNRISE", emoji: "⏰", name: "Sunrise Alarm Clock Wake-Up Light", category: "Home & Kitchen", sub: "Clocks", price: 38.99, bsr: 2764, reviews: 17205, rating: 4.4, cost: 9.6, weight: 1.4, trend: 14.2 },
   { asin: "B0CDESKPAD", emoji: "🖥️", name: "Extended Leather Desk Pad 36x17", category: "Office Products", sub: "Desk Accessories", price: 21.99, bsr: 3310, reviews: 11876, rating: 4.6, cost: 4.9, weight: 1.6, trend: 3.5 },
-  { asin: "B0CGUASHA1", emoji: "💆", name: "Ice Roller & Gua Sha Facial Set", category: "Beauty", sub: "Skin Care Tools", price: 16.99, bsr: 1544, reviews: 33012, rating: 4.3, cost: 2.7, weight: 0.6, trend: 22.6 }
+  { asin: "B0CGUASHA1", emoji: "💆", name: "Ice Roller & Gua Sha Facial Set", category: "Beauty", sub: "Skin Care Tools", price: 16.99, bsr: 1544, reviews: 33012, rating: 4.3, cost: 2.7, weight: 0.6, trend: 22.6 },
+  // Low-review "opportunity" listings — the weak-competition tier the research
+  // table and launch screen exist to surface.
+  { asin: "B0CWALLETM", emoji: "📱", name: "Magnetic Phone Wallet Stand MagSafe-Compatible", category: "Electronics", sub: "Phone Accessories", price: 21.99, bsr: 9800, reviews: 412, rating: 4.5, cost: 3.9, weight: 0.3, trend: 16.8 },
+  { asin: "B0CDOGBEDX", emoji: "🐶", name: "Orthopedic Dog Bed Memory Foam XL", category: "Pet Supplies", sub: "Dog Beds", price: 54.99, bsr: 6120, reviews: 687, rating: 4.6, cost: 16.5, weight: 7.2, trend: 11.9 },
+  { asin: "B0CWORKBRD", emoji: "💪", name: "At-Home Push-Up Workout Board Set", category: "Sports & Outdoors", sub: "Strength Training", price: 42.99, bsr: 7430, reviews: 523, rating: 4.4, cost: 11.2, weight: 5.5, trend: 7.6 },
+  { asin: "B0CSHOWRST", emoji: "🚿", name: "Rainfall Shower Head High Pressure Chrome", category: "Home & Kitchen", sub: "Bath", price: 26.99, bsr: 8200, reviews: 894, rating: 4.3, cost: 6.1, weight: 1.9, trend: 5.2 }
 ];
 
 /* ---------------- TikTok Shop demo products ---------------- */
@@ -64,7 +70,11 @@ const TT_PRODUCTS = [
   { id: "TT-3384", emoji: "🐾", name: "Interactive Cat Chase Toy (Auto)", category: "Pet Supplies", price: 18.99, views7d: 15400000, videos7d: 1230, creators: 391, commission: 0.18, unitsMo: 22600, trend: 28.9, cost: 4.2 },
   { id: "TT-5520", emoji: "💪", name: "Grip Strength Trainer Counter", category: "Sports & Outdoors", price: 9.99, views7d: 12700000, videos7d: 980, creators: 276, commission: 0.15, unitsMo: 19800, trend: 12.1, cost: 1.3 },
   { id: "TT-2098", emoji: "✨", name: "Galaxy Star Projector Night Light", category: "Electronics", price: 25.99, views7d: 18900000, videos7d: 1440, creators: 462, commission: 0.14, unitsMo: 17300, trend: 6.7, cost: 6.9 },
-  { id: "TT-7745", emoji: "🧹", name: "Electric Spin Scrubber Cordless", category: "Home & Kitchen", price: 39.99, views7d: 26800000, videos7d: 1990, creators: 573, commission: 0.16, unitsMo: 24100, trend: 33.5, cost: 12.2 }
+  { id: "TT-7745", emoji: "🧹", name: "Electric Spin Scrubber Cordless", category: "Home & Kitchen", price: 39.99, views7d: 26800000, videos7d: 1990, creators: 573, commission: 0.16, unitsMo: 24100, trend: 33.5, cost: 12.2 },
+  // Early-stage products with few creators attached — the uncrowded feed
+  // the creator-outreach play works best on.
+  { id: "TT-4410", emoji: "🚗", name: "Collapsible Car Trunk Organizer", category: "Home & Kitchen", price: 24.99, views7d: 3100000, videos7d: 210, creators: 64, commission: 0.15, unitsMo: 5200, trend: 21.4, cost: 6.7 },
+  { id: "TT-1177", emoji: "👁️", name: "Magnetic Eyelash Kit No-Glue", category: "Beauty", price: 13.99, views7d: 2400000, videos7d: 180, creators: 88, commission: 0.18, unitsMo: 4100, trend: 15.2, cost: 2.4 }
 ];
 
 /* Deterministic pseudo-random from a string — lets X-Ray produce stable
