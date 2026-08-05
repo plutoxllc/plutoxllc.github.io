@@ -313,6 +313,44 @@ function sendJson(res, status, body) {
   res.end(payload);
 }
 
+// ---------------------------------------------------------------------------
+// GET /api/search?q=keywords — catalog keyword search → candidate ASINs.
+// Exists so tooling (attach-hunt) can resolve retail products to ASINs
+// without any browser. Same token gate as /api/xray.
+// ---------------------------------------------------------------------------
+async function handleSearch(params) {
+  const q = (params.get('q') || '').trim();
+  if (!q) return { status: 400, body: { error: 'missing q' } };
+  if (!isConfigured()) return { status: 503, body: { error: 'SP-API credentials not configured' } };
+
+  const data = await spapiFetch(
+    `/catalog/2022-04-01/items?keywords=${encodeURIComponent(q)}` +
+    `&marketplaceIds=${CONFIG.marketplaceId}&includedData=summaries,salesRanks&pageSize=10`
+  );
+  const items = (data.items || []).map((it) => {
+    const s = (it.summaries || [])[0] || {};
+    const sr = (it.salesRanks || [])[0];
+    const rank = sr && (sr.displayGroupRanks || sr.classificationRanks || [])[0];
+    return {
+      asin: it.asin,
+      name: s.itemName || null,
+      brand: s.brand || null,
+      // parents can't be attached to — surface the classification honestly
+      itemClassification: s.itemClassification || null,
+      bsr: rank ? rank.rank : null,
+      bsrCategory: rank ? rank.title : null,
+    };
+  });
+  return { status: 200, body: { query: q, count: items.length, items } };
+}
+
+function authorized(req, url) {
+  if (!CONFIG.apiToken) return true;
+  const hdr = String(req.headers['authorization'] || '');
+  const presented = hdr.replace(/^Bearer\s+/i, '') || url.searchParams.get('token') || '';
+  return presented === CONFIG.apiToken;
+}
+
 const server = http.createServer(async (req, res) => {
   const started = Date.now();
   let url;
@@ -342,15 +380,20 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === 'GET' && url.pathname === '/api/xray') {
-      if (CONFIG.apiToken) {
-        const hdr = String(req.headers['authorization'] || '');
-        const presented = hdr.replace(/^Bearer\s+/i, '') || url.searchParams.get('token') || '';
-        if (presented !== CONFIG.apiToken) {
-          sendJson(res, 401, { error: 'unauthorized' });
-          return;
-        }
+      if (!authorized(req, url)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
       }
       const { status, body } = await handleXray(url.searchParams);
+      sendJson(res, status, body);
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/api/search') {
+      if (!authorized(req, url)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      const { status, body } = await handleSearch(url.searchParams);
       sendJson(res, status, body);
       return;
     }
